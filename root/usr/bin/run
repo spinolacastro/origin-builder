@@ -1,0 +1,27 @@
+#!/bin/bash -x
+
+export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+BUCKET=originrepo
+FOLDER=pub
+BRANCH=${BRANCH:-master}
+PUBLISH=1
+GITREPO=https://github.com/spinolacastro/origin.git
+
+git clone $GITREPO -b $BRANCH origin
+cd origin
+tito build --rpm --test 
+
+if [ $PUBLISH -eq 1 ];
+  # usando awscli (pip install awscli) para remover o repomd.xml antes do sync
+  aws s3 rm "s3://$BUCKET/$FOLDER/repodata" --recursive
+
+  cd /tmp/tito/
+  # Baixa o conteúdo do S3 antes de gerar o repositório
+  aws s3 sync "s3://$BUCKET/$FOLDER/" .
+
+  createrepo .
+
+  # Envia de volta
+  aws s3 sync . "s3://$BUCKET/$FOLDER/" --acl public-read --delete
+fi
